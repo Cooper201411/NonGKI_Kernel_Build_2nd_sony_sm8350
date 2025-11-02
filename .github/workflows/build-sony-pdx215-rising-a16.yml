@@ -1,4 +1,4 @@
-name: Build Sony PDX215 Rising
+name: Build Sony Xperia 1 III (Rising8.1.1)
 
 on:
   workflow_call:
@@ -137,3 +137,4 @@ jobs:
       - name: ✏️ Upload Artifacts
 
         uses: ./.github/workflows/upload-files
+
