@@ -1,4 +1,4 @@
-name: Build Sony Xperia 1 III (Rising8.1.1)
+name: Build Sony Xperia1III (Rising8.1.1)
 
 on:
   workflow_call:
@@ -6,11 +6,11 @@ on:
 
 env:
   # Device env
-  DEVICE_NAME : "Sony Xperia 1 III"
+  DEVICE_NAME : "Xperia1III"
   DEVICE_CODENAME : "pdx215"
 
   CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
-  EXTRA_CMDS : "LD=ld.lld NM=llvm-nm AR=llvm-ar STRIP=llvm-strip OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump READELF=llvm-readelf LLVM_IAS=1 HOSTCC=clang HOSTCXX=clang++ HOSTLD=ld.lld HOSTAR=llvm-ar"
+  EXTRA_CMDS : "LD=ld.lld NM=llvm-nm AR=llvm-ar STRIP=llvm-strip OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump READELF=llvm-readelf LLVM_IAS=1"
 
   KERNEL_SOURCE : "https://github.com/LineageOS/android_kernel_sony_sm8350.git"
   KERNEL_BRANCH : "lineage-23.0"
@@ -18,19 +18,19 @@ env:
   CLANG_SOURCE : "https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b.git"
   CLANG_BRANCH : "lineage-20.0"
 
-  GCC_GNU : true
-  GCC_64_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
-  GCC_64_BRANCH : "android12L-release"
-  GCC_32_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
-  GCC_32_BRANCH : "android12L-release"
+  GCC_GNU : false
+  GCC_64_SOURCE : "https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git"
+  GCC_64_BRANCH : "lineage-19.1"
+  GCC_32_SOURCE : "https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git"
+  GCC_32_BRANCH : "lineage-19.1"
 
   DEFCONFIG_SOURCE: ""
   DEFCONFIG_NAME : "pdx215_defconfig"
-  DEFCONFIG_ORIGIN_IMAGE: ""
-  DEFCONFIG_FROM_BOOT: false
+  DEFCONFIG_ORIGIN_IMAGE: "https://raw.githubusercontent.com/Cooper201411/NonGKI_Kernel_Build_2nd_sony_sm8350/refs/heads/mainline/Kernel/boot.img"
+  DEFCONFIG_FROM_BOOT: true
 
-  KERNELSU_SOURCE : "https://raw.githubusercontent.com/tiann/KernelSU/refs/heads/main/kernel/setup.sh"
-  KERNELSU_BRANCH : "v0.9.5"
+  KERNELSU_SOURCE : ""
+  KERNELSU_BRANCH : ""
 
   KERNELSU_AUTO_GET : "true" # if u want easy setting kernelsu, u can true.
   KERNELSU_AUTO_FORK : "sukisu" # magic, rsuntk, next, wild, jingmatrix and sukisu
@@ -42,7 +42,7 @@ env:
   AK3_SOURCE : "https://github.com/osm0sis/AnyKernel3.git"
   AK3_BRANCH : "master"
 
-  BOOT_SOURCE : ""
+  BOOT_SOURCE : "https://raw.githubusercontent.com/Cooper201411/NonGKI_Kernel_Build_2nd_sony_sm8350/refs/heads/mainline/Kernel/boot.img"
 
   NEED_DTBO : false
   NEED_SAFE_DTBO : false
@@ -79,17 +79,17 @@ env:
   GENERATE_DTB: "false" # if u kernel need DTB , but cannot auto generate it. (Only Anykernel3).
   GENERATE_CHIP: "qcom" # only supported for qcom and mediatek.
 
-  BUILD_DEBUGGER: "true" # Output build errors.
+  BUILD_DEBUGGER: "false" # Output build errors.
   SKIP_PATCH: "false" # Ignore errors found in Patch Debugger.
 
-  BUILD_OTHER_CONFIG: "true" # Merge config files.
+  BUILD_OTHER_CONFIG: "false" # Merge config files.
   MERGE_CONFIG_FILES: "vendor/debugfs.config,vendor/lahaina_QGKI.config"
 
-  FREE_MORE_SPACE: "true" # if u want get more space, enabled it.
+  FREE_MORE_SPACE: "false" # if u want get more space, enabled it.
 
 jobs:
   build-kernel:
-    name: Build Kernel
+    name: Xperia1III
     runs-on: ubuntu-latest # u can changed to ubuntu 22.04, and need container set ubuntu-latest
     # container: archlinux/archlinux:latest # if u need use arch linux -> archlinux/archlinux:latest or ubuntu 20.04 -> ubuntu:focal
     env:
@@ -106,6 +106,42 @@ jobs:
 
       - name: ⚙️ Get neccssary tools
         uses: ./.github/workflows/build-ready
+
+      - name: 🔒 Prepare sanitized device filename and create swap
+        run: |
+          if [ -n "${DEVICE_CODENAME}" ]; then
+            SANITIZED_DEVICE="${DEVICE_CODENAME}"
+          else
+            SANITIZED_DEVICE="${DEVICE_NAME// /_}"
+          fi
+          echo "SANITIZED_DEVICE=${SANITIZED_DEVICE}" >> $GITHUB_ENV
+          echo "Using SANITIZED_DEVICE=${SANITIZED_DEVICE}"
+
+          # create swap to reduce OOM risk (6G)
+          if ! swapon --show | grep -q '/swapfile'; then
+            sudo fallocate -l 6G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=6144
+            sudo chmod 600 /swapfile
+            sudo mkswap /swapfile
+            sudo swapon /swapfile
+          fi
+          free -h
+
+      - name: 🧰 Limit parallel builds to avoid OOM
+        run: |
+          echo "MAKEFLAGS=-j2" >> $GITHUB_ENV
+          echo "Reduced parallelism to -j2 to avoid OOM / link failures."
+
+      - name: 🩹 Apply temporary qcacld A_STATUS->QDF_STATUS cast patch (optional)
+        run: |
+          CE_FILE="device_kernel/drivers/staging/qcacld-3.0/../qca-wifi-host-cmn/hif/src/ce/ce_main.c"
+          if [ -f "$CE_FILE" ]; then
+            echo "Patching $CE_FILE (temporary explicit cast A_ERROR -> QDF_STATUS) ..."
+            cp "$CE_FILE" "${CE_FILE}.bak" || true
+            sed -i 's/return A_ERROR;/return (QDF_STATUS)A_ERROR;/' "$CE_FILE" || true
+            git --no-pager diff -- "$CE_FILE" || true
+          else
+            echo "$CE_FILE not found; skipping temporary patch."
+          fi
 
       - name: 🪝 Patch Kernel of SUSFS
         uses: ./.github/workflows/patch-susfs
@@ -137,6 +173,13 @@ jobs:
       - name: ✏️ Upload Artifacts
 
         uses: ./.github/workflows/upload-files
+
+
+
+
+
+
+
 
 
 
