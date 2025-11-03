@@ -27,7 +27,7 @@ env:
   DEFCONFIG_SOURCE: ""
   DEFCONFIG_NAME : "pdx215_defconfig"
   DEFCONFIG_ORIGIN_IMAGE: "https://raw.githubusercontent.com/Cooper201411/NonGKI_Kernel_Build_2nd_sony_sm8350/refs/heads/mainline/Kernel/boot.img"
-  DEFCONFIG_FROM_BOOT: false
+  DEFCONFIG_FROM_BOOT: true
 
   KERNELSU_SOURCE : ""
   KERNELSU_BRANCH : ""
@@ -173,6 +173,7 @@ jobs:
       - name: ✏️ Upload Artifacts
 
         uses: ./.github/workflows/upload-files
+
 
 
 
