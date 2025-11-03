@@ -1,4 +1,4 @@
-name: Build Sony Xperia 1 III (Rising8.1.1)
+name: Build Sony Xperia1III (Rising8.1.1)
 
 on:
   workflow_call:
@@ -6,11 +6,11 @@ on:
 
 env:
   # Device env
-  DEVICE_NAME : "Sony Xperia 1 III"
+  DEVICE_NAME : "Xperia1III"
   DEVICE_CODENAME : "pdx215"
 
   CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
-  EXTRA_CMDS : "LD=ld.lld NM=llvm-nm AR=llvm-ar STRIP=llvm-strip OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump READELF=llvm-readelf LLVM_IAS=1 HOSTCC=clang HOSTCXX=clang++ HOSTLD=ld.lld HOSTAR=llvm-ar"
+  EXTRA_CMDS : "LD=ld.lld NM=llvm-nm AR=llvm-ar STRIP=llvm-strip OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump READELF=llvm-readelf LLVM_IAS=1"
 
   KERNEL_SOURCE : "https://github.com/LineageOS/android_kernel_sony_sm8350.git"
   KERNEL_BRANCH : "lineage-23.0"
@@ -107,6 +107,46 @@ jobs:
       - name: ⚙️ Get neccssary tools
         uses: ./.github/workflows/build-ready
 
+      - name: 🔒 Prepare sanitized device filename and create swap
+        run: |
+          # Use codename if present; otherwise sanitize DEVICE_NAME by replacing spaces with underscores
+          if [ -n "${DEVICE_CODENAME}" ]; then
+            SANITIZED_DEVICE="${DEVICE_CODENAME}"
+          else
+            SANITIZED_DEVICE="${DEVICE_NAME// /_}"
+          fi
+          echo "SANITIZED_DEVICE=${SANITIZED_DEVICE}" >> $GITHUB_ENV
+          echo "Using SANITIZED_DEVICE=${SANITIZED_DEVICE}"
+
+          # create swap to reduce OOM risk (6G)
+          if ! swapon --show | grep -q '/swapfile'; then
+            sudo fallocate -l 6G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=6144
+            sudo chmod 600 /swapfile
+            sudo mkswap /swapfile
+            sudo swapon /swapfile
+          fi
+          free -h
+
+      - name: 🧰 Limit parallel builds to avoid OOM
+        run: |
+          # limit make parallelism for GitHub runners (adjust -jN here if needed)
+          echo "MAKEFLAGS=-j2" >> $GITHUB_ENV
+          echo "Reduced parallelism to -j2 to avoid OOM / link failures."
+
+      - name: 🩹 Apply temporary qcacld A_STATUS->QDF_STATUS cast patch (optional)
+        run: |
+          CE_FILE="device_kernel/drivers/staging/qcacld-3.0/../qca-wifi-host-cmn/hif/src/ce/ce_main.c"
+          if [ -f "$CE_FILE" ]; then
+            echo "Patching $CE_FILE (temporary explicit cast A_ERROR -> QDF_STATUS) ..."
+            # 备份
+            cp "$CE_FILE" "${CE_FILE}.bak" || true
+            # 用显式 cast 快速通过 -Wimplicit-enum-enum-cast（长期建议用语义映射替换）
+            sed -i 's/return A_ERROR;/return (QDF_STATUS)A_ERROR;/' "$CE_FILE" || true
+            git --no-pager diff -- "$CE_FILE" || true
+          else
+            echo "$CE_FILE not found; skipping temporary patch."
+          fi
+
       - name: 🪝 Patch Kernel of SUSFS
         uses: ./.github/workflows/patch-susfs
 
@@ -137,6 +177,7 @@ jobs:
       - name: ✏️ Upload Artifacts
 
         uses: ./.github/workflows/upload-files
+
 
 
 
