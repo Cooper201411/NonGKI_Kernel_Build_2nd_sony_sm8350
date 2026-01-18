@@ -11,7 +11,7 @@ jobs:
   # OPPO
   ## Oneplus
   build-oneplus-8-series-oos13-a13-xtd:
-    name: "Oneplus 8 Series (OxygenOS 13 A13) (XTD Kernel)"
+    name: "Oneplus 8 Series (ColorOS 13 A13 XTD)"
     strategy:
       fail-fast: true
     uses: ./.github/workflows/build-oneplus-8-series-oos13-a13-xtd.yml
@@ -37,6 +37,13 @@ jobs:
     strategy:
       fail-fast: true
     uses: ./.github/workflows/build-xiaomi-11-evox-a16.yml
+    secrets: inherit
+
+  build-xiaomi-mix2s-aosp-a16-419:
+    name: "Xiaomi Mix2s (AOSP A16) 4.19"
+    strategy:
+      fail-fast: true
+    uses: ./.github/workflows/build-xiaomi-mix2s-aosp-a16-419.yml
     secrets: inherit
 
   ## Redmi
